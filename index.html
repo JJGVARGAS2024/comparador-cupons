@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AppComparador - Conferência de Cupons</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body>
+    <div class="container">
+        <h1 class="no-print">SISTEMA DE CUPONS FISCAIS</h1>
+        
+        <div class="scann-container no-print" style="margin-bottom: 20px; text-align: center;">
+            <button id="btnIniciarCamera" onclick="ligarCameraCelular()" style="background-color: #6D28D9; width: 100%;">
+                LER QR CODE COM A CÂMERA DO CELULAR 📷
+            </button>
+            <div id="leitor-camera" style="width: 100%; max-width: 400px; margin: 15px auto 0 auto; border-radius: 8px; overflow: hidden; display: none;"></div>
+        </div>
+
+        <div class="input-group no-print">
+            <label for="urlQrCode">URL do QR Code / Link da Consulta:</label>
+            <input type="text" id="urlQrCode" placeholder="O link aparecerá aqui após ler o QR Code...">
+        </div>
+
+        <div class="botoes-container no-print">
+            <button id="btnEnviar" class="btn-principal" onclick="processarEGerarTabela()">PROCESSAR ⚡</button>
+            <button id="btnLimpar" class="btn-perigo" onclick="limparCampos()">LIMPAR 🗑️</button>
+        </div>
+
+        <p id="status" class="no-print">Aguardando envio do cupom...</p>
+
+        <div class="container-saida no-print" style="text-align: right; margin-bottom: 15px;">
+            <button class="btn-perigo" onclick="sairDoProjeto()">Sair do Projeto 🚪</button>
+        </div>
+
+        <div class="card-empresa" id="blocoEmpresa" style="display: none;">
+            <h3>DADOS DO ESTABELECIMENTO (FORNECEDOR)</h3>
+            <div id="dadosEmpresaCorpo"></div>
+        </div>
+
+        <div class="card-tabela" id="blocoTabela" style="display: none;">
+            <h3>TABELA DE CONFERÊNCIA DE PRODUTOS</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Descrição do Produto</th>
+                            <th>Qtd</th>
+                            <th>Vlr. Unitário</th>
+                            <th>Vlr. Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoTabelaItens">
+                        </tbody>
+                </table>
+            </div>
+            <div class="total-nota-container">
+                <strong>VALOR TOTAL DO CUPOM:</strong> <span id="valorTotalNota">R$ 0,00</span>
+            </div>
+        </div>
+
+    <div id="blocoConexao" class="card-conexao no-print" style="display: none;">
+    <h3>Ações de Banco de Dados & Conectividade</h3>
+    <div class="botoes-remotos">
+        <button class="btn-sucesso" onclick="gravarNoBancoRemoto()">Salvar no Banco Remoto</button>
+        <button class="btn-perigo" onclick="limparBancoRemoto()">Limpar Lançamento Errado</button>
+        <button class="btn-impressao" onclick="mandarParaImpressoraWiFi()">Imprimir via Wi-Fi</button>
+    </div>
+</div>   
+
+    <script src="app.js"></script>
+</body>
+</html>

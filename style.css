@@ -1,0 +1,139 @@
+body {
+    background-color: #1A1A1A;
+    color: #FFFFFF;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.container {
+    width: 100%;
+    max-width: 650px;
+    background-color: #222222;
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+    box-sizing: border-box;
+}
+
+h1 { font-size: 1.3rem; text-align: center; margin-bottom: 25px; font-weight: bold; color: #FFF; }
+h3 { font-size: 0.9rem; color: #A0A0A0; margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 5px; letter-spacing: 0.5px; }
+
+.botoes-container, .botoes-remotos {
+    display: flex;
+    gap: 12px;
+    margin-top: 15px;
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 14px;
+    box-sizing: border-box;
+    background-color: #333333;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    color: #00FF00;
+    font-family: monospace;
+    font-size: 1rem;
+}
+
+.btn-perigo {
+    background-color: #d32f2f;
+    color: white;
+    border: none;
+    padding: 12px 20px; /* Tamanho ideal para clicar com o dedo no celular */
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 5px;
+    cursor: pointer;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-perigo:active {
+    background-color: #9a0007; /* Efeito visual ao tocar no celular */
+}
+
+button {
+    padding: 15px;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: background 0.2s;
+}
+
+/* Estilização específica do botão de escaneamento */
+#btnIniciarCamera {
+    background-color: #6D28D9 !important;
+    font-size: 1rem;
+    box-shadow: 0 4px 10px rgba(109, 40, 217, 0.3);
+}
+#btnIniciarCamera:hover { background-color: #5B21B6 !important; }
+
+/* Customização do quadrado da câmera que a biblioteca gera */
+#leitor-camera {
+    border: 2px solid #333;
+    background-color: #111;
+}
+
+/* Botões do painel inferior */
+.btn-principal { flex: 2; background-color: #0B3C5D; }
+.btn-principal:hover { background-color: #125582; }
+.btn-perigo { flex: 1; background-color: #A62B2B; }
+.btn-perigo:hover { background-color: #C43737; }
+.btn-sucesso { flex: 1; background-color: #1E6B38; }
+.btn-sucesso:hover { background-color: #28874A; }
+.btn-impressao { flex: 1; background-color: #D97706; }
+.btn-impressao:hover { background-color: #F59E0B; }
+
+#status { text-align: center; font-size: 0.85rem; color: #A0A0A0; margin: 15px 0; }
+
+.card-empresa, .card-tabela, .card-conexao {
+    background-color: #1E1E1E;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    padding: 18px;
+    margin-top: 20px;
+}
+
+.card-empresa { font-family: monospace; line-height: 1.6; }
+
+.table-responsive { overflow-x: auto; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: monospace;
+    font-size: 0.9rem;
+    text-align: left;
+}
+
+th { background-color: #2D2D2D; color: #A0A0A0; padding: 12px; border-bottom: 2px solid #444; }
+td { padding: 12px; border-bottom: 1px solid #333; color: #E0E0E0; }
+tr:hover { background-color: #252525; }
+.total-nota-container { text-align: right; margin-top: 15px; font-family: monospace; font-size: 1.1rem; color: #00FF00; }
+
+/* --- REGRAS DE RESPONSIVIDADE PARA CELULAR E TABLET --- */
+@media (max-width: 600px) {
+    body { padding: 10px; }
+    .container { padding: 15px; }
+    .botoes-container, .botoes-remotos { flex-direction: column; gap: 8px; }
+    button { width: 100%; padding: 16px; font-size: 1rem; }
+    table { font-size: 0.8rem; }
+    th, td { padding: 8px; }
+}
+
+/* --- REGRAS DO MOTOR DE IMPRESSÃO --- */
+@media print {
+    body { background-color: #FFF; color: #000; padding: 0; }
+    .container { width: 100%; max-width: 100%; box-shadow: none; background: transparent; padding: 0; }
+    .no-print { display: none !important; }
+    .card-empresa, .card-tabela { border: none; background: transparent; padding: 0; color: #000; }
+    th { background-color: #EEE !important; color: #000 !important; border-bottom: 1px solid #000; }
+    td { color: #000 !important; border-bottom: 1px solid #DDD; }
+    .total-nota-container { color: #000 !important; }
+}
