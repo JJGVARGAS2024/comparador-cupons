@@ -1,5 +1,6 @@
 {
-  "watch": ["*.js", "*.json", "*.html", "*.css"],
+  "$schema": "https://json.schemastore.org/nodemon.json",
+  "watch": ["server.js", "app.js"],
   "ext": "js,json,html,css",
   "ignore": ["node_modules", ".git"],
   "exec": "node server.js"
