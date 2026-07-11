@@ -1,6 +1,9 @@
 let html5QrcodeScanner = null;
 let dadosProcessadosGlobais = null;
 
+// 🔴 CONFIGURAÇÃO DA PORTA DO SERVIDOR BACKEND
+const API_BASE_URL = "http://localhost:8080";
+
 // Busca o HTML da URL fornecida
 async function buscarHTMLDaReceita(url) {
     try {
@@ -13,8 +16,8 @@ async function buscarHTMLDaReceita(url) {
             return await response.text();
         }
         
-        // Para URLs externas, usa o proxy local
-        const proxyUrl = `/fetch-html?url=${encodeURIComponent(url)}`;
+        // 🔴 Corrigido: Aponta explicitamente para o servidor na porta 8080
+        const proxyUrl = `${API_BASE_URL}/fetch-html?url=${encodeURIComponent(url)}`;
         const response = await fetch(proxyUrl);
         if (!response.ok) {
             throw new Error(`Erro HTTP! Status: ${response.status}`);
@@ -41,10 +44,9 @@ function extrairDadosDoHTML(html) {
         itens: []
     };
 
-    // Tenta extrair razão social - busca em textos comuns
     let textoCompleto = doc.body.innerText;
     
-    // Extrai CNPJ (formato: XX.XXX.XXX/XXXX-XX ou XXXXXXXXXXXXXX)
+    // Extrai CNPJ
     const regexCNPJ = /(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14})/;
     const matchCNPJ = textoCompleto.match(regexCNPJ);
     if (matchCNPJ) {
@@ -55,7 +57,7 @@ function extrairDadosDoHTML(html) {
         dados.cnpj = cnpj;
     }
 
-    // Extrai CPF (formato: XXX.XXX.XXX-XX ou XXXXXXXXXXX)
+    // Extrai CPF
     const regexCPF = /(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})/;
     const matchCPF = textoCompleto.match(regexCPF);
     if (matchCPF) {
@@ -66,7 +68,7 @@ function extrairDadosDoHTML(html) {
         dados.cpfComprador = cpf;
     }
 
-    // Extrai chave de acesso (44 dígitos) para extrair série e número
+    // Extrai chave de acesso
     const regexChave = /\b(\d{44})\b/;
     const matchChave = textoCompleto.match(regexChave);
     if (matchChave) {
@@ -75,7 +77,7 @@ function extrairDadosDoHTML(html) {
         dados.numeroNfce = parseInt(chave.substring(25, 34), 10).toString().padStart(9, '0');
     }
 
-    // Extrai razão social - busca em tags, textos ou primeira tabela
+    // Extrai razão social
     const possiveisRazaoSocial = doc.querySelectorAll('h1, h2, h4, [class*="empresa"], [class*="razao"], [class*="estabeleci"]');
     let encontrouRazaoSocial = false;
     
@@ -88,7 +90,6 @@ function extrairDadosDoHTML(html) {
         }
     }
     
-    // Se não encontrou, tenta primeira tabela (formato Minas Gerais)
     if (!encontrouRazaoSocial) {
         const primeiraTabela = doc.querySelector('table');
         if (primeiraTabela) {
@@ -106,31 +107,22 @@ function extrairDadosDoHTML(html) {
 
     // --- ESTRATÉGIA 1: Busca por tabelas ---
     const tabelas = doc.querySelectorAll('table');
-    
-    // Verifica se existe tabela com id="myTable" (padrão Minas Gerais)
     let tabelaProdutos = doc.getElementById('myTable');
     
     if (tabelaProdutos) {
-        // Formato Minas Gerais: tabela com id="myTable"
         const linhas = tabelaProdutos.closest('table').querySelectorAll('tr');
-        
         for (let i = 0; i < linhas.length; i++) {
             const colunas = linhas[i].querySelectorAll('td');
             if (colunas.length >= 4) {
-                // Coluna 0: Descrição do produto com código
                 const descricao = colunas[0]?.innerText?.trim() || "";
-                
-                // Coluna 1: "Qtde total de ítens: X.XXXX"
                 const qtdTexto = colunas[1]?.innerText?.trim() || "";
-                const matchQtd = qtdTexto.match(/Qtde total de ítens:\s*([\d.,]+)/);
+                const matchQtd = qtdTexto.match(/Qtde total de itens:\s*([\d.,]+)/i) || qtdTexto.match(/Qtde total de ítens:\s*([\d.,]+)/i);
                 const quantidade = matchQtd ? parseFloat(matchQtd[1].replace(',', '.')) : 1;
                 
-                // Coluna 3: "Valor total R$: R$ X,XX"
                 const valorTexto = colunas[3]?.innerText?.trim() || "";
                 const matchValor = valorTexto.match(/R\$\s*([\d.,]+)/);
                 const total = matchValor ? parseFloat(matchValor[1].replace(',', '.')) : 0;
                 
-                // Calcula valor unitário
                 const valorUnitario = quantidade > 0 ? total / quantidade : 0;
                 
                 if (descricao && !isNaN(quantidade) && quantidade > 0 && total > 0) {
@@ -143,39 +135,26 @@ function extrairDadosDoHTML(html) {
                 }
             }
         }
-        
         if (dados.itens.length > 0) return dados;
     }
     
-    // Estratégia alternativa: busca normal em todas as tabelas
     for (let tabela of tabelas) {
-        // Pula tabelas de header/estabelecimento (primeira tabela geralmente)
         if (tabela.querySelector('thead') && !tabela.querySelector('[class*="striped"]')) {
             continue;
         }
-        
         const linhas = tabela.querySelectorAll('tr');
-        
         for (let i = 1; i < linhas.length; i++) {
             const colunas = linhas[i].querySelectorAll('td, th');
             if (colunas.length >= 2) {
                 const descricao = colunas[0]?.innerText?.trim() || "";
-                const quantidade = parseFloat(
-                    colunas[1]?.innerText?.trim()?.replace(',', '.') || "1"
-                );
+                const quantidade = parseFloat(colunas[1]?.innerText?.trim()?.replace(',', '.') || "1");
                 
-                // Tenta extrair valor unitário - procura por R$ em várias colunas
                 let valorUnitario = 0;
                 for (let j = 2; j < colunas.length - 1; j++) {
                     const texto = colunas[j]?.innerText?.trim() || "";
                     if (texto.includes('R$') || texto.match(/^\d+[.,]\d{2}$/)) {
-                        // Remove "R$", espaços, e converte vírgula em ponto
-                        valorUnitario = parseFloat(
-                            texto.replace(/R\$|\s/g, '').replace(',', '.')
-                        );
-                        if (!isNaN(valorUnitario) && valorUnitario > 0) {
-                            break;
-                        }
+                        valorUnitario = parseFloat(texto.replace(/R\$|\s/g, '').replace(',', '.'));
+                        if (!isNaN(valorUnitario) && valorUnitario > 0) break;
                     }
                 }
                 
@@ -189,11 +168,10 @@ function extrairDadosDoHTML(html) {
                 }
             }
         }
-        
         if (dados.itens.length > 0) return dados;
     }
 
-    // --- ESTRATÉGIA 2: Busca por divs com classe "produto" ou "item" ---
+    // --- ESTRATÉGIA 2: Busca por divs ---
     const produtoDivs = doc.querySelectorAll('[class*="produto"], [class*="item"], [class*="line"]');
     for (let div of produtoDivs) {
         const texto = div.innerText?.trim();
@@ -202,14 +180,12 @@ function extrairDadosDoHTML(html) {
             if (linhas.length >= 2) {
                 const descricao = linhas[0];
                 const quantidade = parseFloat(linhas[1] || "1");
-                const valorUnitario = parseFloat(
-                    linhas[2]?.replace(/[R$\s,]/g, '').replace(',', '.') || "0"
-                );
+                const valorUnitario = parseFloat(linhas[2]?.replace(/[R$\s,]/g, '').replace(',', '.') || "0");
                 
                 if (descricao && !isNaN(quantidade)) {
                     dados.itens.push({
                         descricao: descricao,
-                        quantidade: quantidade,
+                        quantidade: quantity,
                         valorUnitario: valorUnitario,
                         total: quantidade * valorUnitario
                     });
@@ -218,9 +194,9 @@ function extrairDadosDoHTML(html) {
         }
     }
 
-    if (dados.itens.length > 0) return dados;
+    if (dados.itens && dados.itens.length > 0) return dados;
 
-    // --- ESTRATÉGIA 3: Busca por padrão de texto com valores monetários ---
+    // --- ESTRATÉGIA 3: Busca por padrão de texto ---
     const linhasTexto = textoCompleto.split('\n').filter(l => l.trim());
     for (let linha of linhasTexto) {
         const regexProduto = /^(.+?)\s+(\d+(?:[.,]\d+)?)\s+R\$\s*([\d.,]+)/;
@@ -242,7 +218,6 @@ function extrairDadosDoHTML(html) {
         }
     }
 
-    console.log('Dados extraídos:', dados);
     return dados;
 }
 
@@ -260,15 +235,10 @@ function ligarCameraCelular() {
     html5QrcodeScanner.render((textoQrCode) => {
         document.getElementById('urlQrCode').value = textoQrCode;
         document.getElementById('status').innerText = "QR Code escaneado com sucesso!";
-        
         html5QrcodeScanner.clear();
         elementoCamera.style.display = "none";
-        
-        // Dispara o processamento dinâmico imediato
         processarEGerarTabela();
-    }, (erro) => {
-        // Varrendo em busca do foco do código
-    });
+    }, (erro) => { /* Silencia erros de varredura */ });
 }
 
 function limparCampos() {
@@ -301,27 +271,16 @@ function processarEGerarTabela() {
 
     statusTxt.innerText = "Buscando e processando dados da receita...";
 
-    // Busca o HTML da URL e processa os dados
     buscarHTMLDaReceita(urlInput)
         .then(html => {
             const dadosExtraidos = extrairDadosDoHTML(html);
             
-            // Fallback para dados padrão se algo não for extraído
-            if (!dadosExtraidos.cnpj) {
-                dadosExtraidos.cnpj = "20.633.061/0005-27";
-            }
-            if (!dadosExtraidos.numeroNfce) {
-                dadosExtraidos.numeroNfce = "000133234";
-            }
-            if (!dadosExtraidos.serie) {
-                dadosExtraidos.serie = "110";
-            }
-            if (!dadosExtraidos.cpfComprador) {
-                dadosExtraidos.cpfComprador = "536.989.166-49";
-            }
-            if (!dadosExtraidos.nomeComprador) {
-                dadosExtraidos.nomeComprador = "CONSUMIDOR";
-            }
+            // Fallbacks de segurança
+            if (!dadosExtraidos.cnpj) dadosExtraidos.cnpj = "20.633.061/0005-27";
+            if (!dadosExtraidos.numeroNfce) dadosExtraidos.numeroNfce = "000133234";
+            if (!dadosExtraidos.serie) dadosExtraidos.serie = "110";
+            if (!dadosExtraidos.cpfComprador) dadosExtraidos.cpfComprador = "536.989.166-49";
+            if (!dadosExtraidos.nomeComprador) dadosExtraidos.nomeComprador = "CONSUMIDOR";
             if (dadosExtraidos.itens.length === 0) {
                 dadosExtraidos.itens.push({
                     descricao: "ITENS NÃO DISPONÍVEIS NO HTML",
@@ -331,7 +290,6 @@ function processarEGerarTabela() {
                 });
             }
 
-            // Agrupamento de itens duplicados (Map)
             const mapaConferencia = new Map();
             dadosExtraidos.itens.forEach(item => {
                 const nomeChave = item.descricao.trim().toUpperCase();
@@ -348,7 +306,6 @@ function processarEGerarTabela() {
                 }
             });
 
-            // Estrutura do objeto global para persistência
             dadosProcessadosGlobais = {
                 supermercado: { cnpj: dadosExtraidos.cnpj, razaoSocial: dadosExtraidos.razaoSocial },
                 cupomFiscal: { 
@@ -389,7 +346,6 @@ function processarEGerarTabela() {
 
             valorTotalNota.innerText = `R$ ${somatorioNota.toFixed(2).replace('.', ',')}`;
 
-            // Renderiza o cabeçalho
             dadosEmpresaCorpo.innerHTML = `
                 <strong>SUPERMERCADO:</strong> ${dadosProcessadosGlobais.supermercado.razaoSocial}<br>
                 <strong>CNPJ:</strong> ${dadosProcessadosGlobais.supermercado.cnpj}<br>
@@ -409,7 +365,6 @@ function processarEGerarTabela() {
         });
 }
 
-
 async function gravarNoBancoRemoto() {
     if (!dadosProcessadosGlobais) {
         alert("Não há dados processados para gravar.");
@@ -420,7 +375,8 @@ async function gravarNoBancoRemoto() {
     statusTxt.innerText = 'Salvando dados no MongoDB...';
 
     try {
-        const response = await fetch('/salvar-cupom', {
+        // 🔴 Corrigido: Rota completa apontando explicitamente para a porta 8080
+        const response = await fetch(`${API_BASE_URL}/salvar-cupom`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -448,7 +404,8 @@ async function testarConexaoMongo() {
     statusTxt.innerText = 'Testando conexão com MongoDB...';
 
     try {
-        const response = await fetch('/teste-mongo');
+        // 🔴 Corrigido: Rota completa apontando para a porta 8080
+        const response = await fetch(`${API_BASE_URL}/teste-mongo`);
         const result = await response.json();
 
         if (!response.ok || !result.ok) {
@@ -464,7 +421,6 @@ async function testarConexaoMongo() {
     }
 }
 
-// Limpar dados lançados incorretamente no Banco
 function limparBancoRemoto() {
     if (!dadosProcessadosGlobais) {
         alert("Não há dados carregados para limpar.");
@@ -477,24 +433,43 @@ function limparBancoRemoto() {
     }
 }
 
-// Impressão Wi-Fi sem traços para não gerar erro de sintaxe
+function compararPrecos(itensComProduto) {
+    if (!itensComProduto || itensComProduto.length === 0) {
+        console.log("Nenhum produto encontrado para comparar.");
+        return;
+    }
+    const produtoMaisBarato = itensComProduto.reduce((menor, atual) => {
+        return atual.preco < menor.preco ? atual : menor;
+    });
+    exibirNaTela(itensComProduto, produtoMaisBarato);
+}
+
+function exibirNaTela(todosOsItens, maisBarato) {
+    const tabela = document.getElementById("tabela-produtos");
+    if (!tabela) return;
+    tabela.innerHTML = ""; 
+    todosOsItens.forEach(item => {
+        const ehOPrecoMaisBarato = item._id === maisBarato._id;
+        const linha = `
+            <tr style="${ehOPrecoMaisBarato ? 'background-color: #d4edda; font-weight: bold; color: #155724;' : ''}">
+                <td>${item.produto}</td>
+                <td>${item.supermercado}</td>
+                <td>R$ ${item.preco.toFixed(2)}</td>
+                <td>${ehOPrecoMaisBarato ? '⭐ Mais Barato!' : ''}</td>
+            </tr>
+        `;
+        tabela.innerHTML += linha;
+    });
+}
+
 function mandarParaImpressoraWiFi() {
     window.print();
 }
 
-// Função para Sair do Projeto e Resetar o App no Celular/Tablet
 function sairDoProjeto() {
     if (confirm("Deseja realmente sair e fechar os dados do cupom atual?")) {
-        // 1. Limpa todos os campos e esconde as tabelas
         limparCampos();
-        
-        // 2. Reseta as variáveis globais
         dadosProcessadosGlobais = null;
-        
-        // 3. Altera o status para o estado inicial
         document.getElementById('status').innerText = "Aguardando envio do cupom...";
-        
-        // Opcional: Se quiser redirecionar para o início ou fechar a aba (se permitido pelo celular)
-        // window.location.reload(); // Recarrega a página zerada
     }
 }

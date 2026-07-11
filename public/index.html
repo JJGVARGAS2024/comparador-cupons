@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparador de Cupons</title>
+
+<style>
+    body {
+        font-family: system-ui;
+        background: #f5f5f5;
+        margin: 0;
+        padding: 10px;
+    }
+    .container {
+        max-width: 1100px;
+        margin: auto;
+    }
+    .card {
+        background: #fff;
+        padding: 15px;
+        margin-bottom: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    h2 { margin-top: 0; }
+    input, textarea {
+        width: 100%;
+        padding: 8px;
+        margin-top: 6px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+    }
+    button {
+        margin-top: 10px;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 6px;
+        background: #007bff;
+        color: #fff;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    button.secondary {
+        background: #6c757d;
+    }
+    pre {
+        background: #111;
+        color: #0f0;
+        padding: 10px;
+        border-radius: 6px;
+        overflow-x: auto;
+    }
+    #videoPreview {
+        width: 100%;
+        border-radius: 10px;
+        margin-top: 10px;
+        display: none;
+    }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+    <div class="card">
+        <h2>Ler QR Code da NFC-e</h2>
+        <button id="btnScanQR">📷 Ler QR Code</button>
+        <video id="videoPreview"></video>
+        <pre id="qrResultado">{}</pre>
+    </div>
+
+    <div class="card">
+        <h2>Processar Cupom</h2>
+        <label>URL da NFC-e:</label>
+        <input type="text" id="url" placeholder="https://...">
+
+        <label>HTML da NFC-e:</label>
+        <textarea id="html"></textarea>
+
+        <button id="btnProcessar">Processar</button>
+        <pre id="processarResultado">{}</pre>
+    </div>
+
+    <div class="card">
+        <h2>Salvar Cupom</h2>
+        <textarea id="cupomJson"></textarea>
+        <button id="btnSalvar">Salvar</button>
+        <pre id="salvarResultado">{}</pre>
+    </div>
+
+    <div class="card">
+        <h2>Consulta de Preços</h2>
+        <input type="text" id="produtoBusca" placeholder="Ex: arroz, leite...">
+        <button id="btnConsultarPreco">Consultar</button>
+
+        <div id="stats" style="display:none;">
+            <p><strong>Último preço:</strong> <span id="ultimoPreco"></span></p>
+            <p><strong>Menor preço:</strong> <span id="menorPreco"></span></p>
+            <p><strong>Registros:</strong> <span id="qtdRegistros"></span></p>
+        </div>
+
+        <ul id="historicoPrecosLista"></ul>
+    </div>
+
+    <div class="card">
+        <h2>Histórico de Compras</h2>
+        <button id="btnHistorico" class="secondary">Carregar</button>
+        <pre id="historicoResultado">[]</pre>
+    </div>
+
+    <div class="card">
+        <h2>Produtos Cadastrados</h2>
+        <button id="btnProdutos" class="secondary">Carregar</button>
+        <pre id="produtosResultado">[]</pre>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+<script>
+const API = "http://localhost:8080";
+let historicoCache = null;
+
+// ---------------- QR CODE ----------------
+document.getElementById("btnScanQR").onclick = async () => {
+    const video = document.getElementById("videoPreview");
+    video.style.display = "block";
+
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }});
+    video.srcObject = stream;
+    video.play();
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    function scan() {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imgData.data, canvas.width, canvas.height);
+
+            if (code) {
+                document.getElementById("qrResultado").textContent = code.data;
+
+                // envia automaticamente para processamento
+                document.getElementById("url").value = code.data;
+                processarCupom(code.data);
+
+                stream.getTracks().forEach(t => t.stop());
+                video.style.display = "none";
+                return;
+            }
+        }
+        requestAnimationFrame(scan);
+    }
+    scan();
+};
+
+// ---------------- PROCESSAR ----------------
+async function processarCupom(url) {
+    try {
+        const res = await fetch(`${API}/processar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url })
+        });
+        const json = await res.json();
+        document.getElementById("processarResultado").textContent = JSON.stringify(json, null, 2);
+
+        if (json.ok) {
+            document.getElementById("cupomJson").value = JSON.stringify(json.compra, null, 2);
+        }
+    } catch (e) {
+        alert("Erro ao processar: " + e.message);
+    }
+}
+
+document.getElementById("btnProcessar").onclick = () => {
+    const url = document.getElementById("url").value.trim();
+    const html = document.getElementById("html").value.trim();
+    processarCupom(url || html);
+};
+
+// ---------------- SALVAR ----------------
+document.getElementById("btnSalvar").onclick = async () => {
+    try {
+        const cupom = JSON.parse(document.getElementById("cupomJson").value);
+        const res = await fetch(`${API}/salvar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(cupom)
+        });
+        const json = await res.json();
+        document.getElementById("salvarResultado").textContent = JSON.stringify(json, null, 2);
+    } catch (e) {
+        alert("JSON inválido");
+    }
+};
+
+// ---------------- HISTÓRICO ----------------
+document.getElementById("btnHistorico").onclick = async () => {
+    const res = await fetch(`${API}/historico`);
+    historicoCache = await res.json();
+    document.getElementById("historicoResultado").textContent = JSON.stringify(historicoCache, null, 2);
+};
+
+// ---------------- PRODUTOS ----------------
+document.getElementById("btnProdutos").onclick = async () => {
+    const res = await fetch(`${API}/produtos`);
+    const json = await res.json();
+    document.getElementById("produtosResultado").textContent = JSON.stringify(json, null, 2);
+};
+
+// ---------------- CONSULTA DE PREÇOS ----------------
+document.getElementById("btnConsultarPreco").onclick = () => {
+    const termo = document.getElementById("produtoBusca").value.toLowerCase();
+    if (!historicoCache) return alert("Carregue o histórico primeiro.");
+
+    const registros = [];
+
+    historicoCache.compras.forEach(compra => {
+        compra.itens.forEach(item => {
+            if (item.descricao.toLowerCase().includes(termo)) {
+                registros.push({
+                    descricao: item.descricao,
+                    total: item.total,
+                    data: compra.dataCompra
+                });
+            }
+        });
+    });
+
+    if (!registros.length) {
+        alert("Nenhum registro encontrado.");
+        return;
+    }
+
+    registros.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+    const ultimo = registros[0].total;
+    const menor = Math.min(...registros.map(r => r.total));
+
+    document.getElementById("stats").style.display = "block";
+    document.getElementById("ultimoPreco").textContent = "R$ " + ultimo.toFixed(2);
+    document.getElementById("menorPreco").textContent = "R$ " + menor.toFixed(2);
+    document.getElementById("qtdRegistros").textContent = registros.length;
+
+    const ul = document.getElementById("historicoPrecosLista");
+    ul.innerHTML = "";
+    registros.forEach(r => {
+        const li = document.createElement("li");
+        li.textContent = `${new Date(r.data).toLocaleDateString()} - ${r.descricao} - R$ ${r.total.toFixed(2)}`;
+        ul.appendChild(li);
+    });
+};
+</script>
+
+</body>
+</html>
